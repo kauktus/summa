@@ -1,47 +1,79 @@
-image: Visual Studio 2017
+#...............................................................................
+#
+#  This file is part of the Doxyrest toolkit.
+#
+#  Doxyrest is distributed under the MIT license.
+#  For details see accompanying license.txt file,
+#  the public copy of which is also available at:
+#  http://tibbo.com/downloads/archive/doxyrest/license.txt
+#
+#...............................................................................
 
-version: 0.5.1+appveyor.{build}
-
+image:
+    - Visual Studio 2015
+    
 init:
-  - dotnet --info
-  - git config --global core.autocrlf true
+    - git config --global core.autocrlf input
 
-configuration: release
+clone_folder: c:\projects\doxyrest
+shallow_clone: true
+
+platform:
+    - x64
+    - x86
+
+configuration:
+    - Debug
+    - Release
+
+environment:
+    matrix:
+
+        - TOOLCHAIN: msvc15
+
+matrix:
+    fast_finish: false
+
+    exclude:
+        -   image: Visual Studio 2015
+            TOOLCHAIN: msvc15
+
+
+
+install:
+    - call ci\appveyor\set-env.bat %TOOLCHAIN% %PLATFORM%
+    - call ci\appveyor\install.bat
+    - git clone --depth 1 https://github.com/vovkos/axl
 
 build_script:
-  - dotnet build src\LocalAppVeyor.Engine --configuration %configuration%
-  - dotnet build src\LocalAppVeyor --configuration %configuration%
-
-after_build:
-  - dotnet pack src\LocalAppVeyor.Engine --configuration %configuration% --output out_engine
-  - dotnet pack src\LocalAppVeyor --configuration %configuration% --output out_console
+    - call ci\appveyor\build.bat
+    - ps: Add-AppveyorMessage "APPVEYOR_REPO_COMMIT=$env:APPVEYOR_REPO_COMMIT"
 
 test_script:
-  - dotnet test tests\LocalAppVeyor.Engine.UnitTests\LocalAppVeyor.Engine.UnitTests.csproj --configuration %configuration%
+    - ctest -C %CONFIGURATION% --output-on-failure
+
+notifications:
+    -   provider: Webhook
+        on_build_success: true
+        on_build_failure: false
+
+        url: http://jancy.org:5005/appveyor-ci
 
 artifacts:
-  - path: src\LocalAppVeyor.Engine\out_engine\*.nupkg
-    name: engine_packages
-  - path: src\LocalAppVeyor\out_console\*.nupkg
-    name: console_packages
+    -   path: $(DOXYREST_PACKAGE_FILE)
+        name: doxyrest_package
 
 deploy:
-  - provider: NuGet
-    api_key: 
-      secure: 5tGafPyxJmP3WyC7bjI7bViV45eIqB6f43p6326+FSRkbZFnfTCt0k5xHxFT5ULj
-    on:
-      branch: master
-      appveyor_repo_tag: true
-      configuration: release
-    skip_symbols: true
-    artifact: engine_packages
+    description: '$(APPVEYOR_REPO_TAG_NAME)'
+    provider: GitHub
 
-  - provider: NuGet
-    api_key: 
-      secure: 9blRHAdK46w0k9LsDyqa7fnKwLDqVfX4sRDamTq0rffK1W3LCsIwwJUKCSW9uXsm
+    auth_token:
+        secure: jpZmZjs4rexF7ix1wvN56hvAac2tGVAffQGsygfqMfR34Ls1SkvC1DQaf4On7RTB
+
+    artifact: doxyrest_package
+    force_update: true
+
     on:
-      branch: master
-      appveyor_repo_tag: true
-      configuration: release
-    skip_symbols: true
-    artifact: console_packages
+        appveyor_repo_tag: true
+        toolchain: msvc10
+        configuration: Release
